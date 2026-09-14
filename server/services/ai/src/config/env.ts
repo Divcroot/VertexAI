@@ -9,6 +9,12 @@ interface Environment {
     AUTH_SERVICE_URL: string;
     FILE_SERVICE_URL: string;
     OPENROUTER_API_KEY: string;
+    GOOGLE_API_KEY: string;
+    GROQ_API_KEY: string;
+    DASHSCOPE_API_KEY: string;
+    CLOUDFLARE_ACCOUNT_ID: string;
+    CLOUDFLARE_API_TOKEN: string;
+    MISTRAL_API_KEY: string;
 }
 
 const getRequiredEnv = (key: string): string => {
@@ -51,4 +57,10 @@ export const env: Environment = {
     AUTH_SERVICE_URL: getRequiredEnv("AUTH_SERVICE_URL"),
     FILE_SERVICE_URL: getRequiredEnv("FILE_SERVICE_URL"),
     OPENROUTER_API_KEY: getRequiredEnv("OPENROUTER_API_KEY"),
+    GOOGLE_API_KEY: getRequiredEnv("GOOGLE_API_KEY"),
+    GROQ_API_KEY: getRequiredEnv("GROQ_API_KEY"),
+    DASHSCOPE_API_KEY: getRequiredEnv("DASHSCOPE_API_KEY"),
+    CLOUDFLARE_ACCOUNT_ID: getRequiredEnv("CLOUDFLARE_ACCOUNT_ID"),
+    CLOUDFLARE_API_TOKEN: getRequiredEnv("CLOUDFLARE_API_TOKEN"),
+    MISTRAL_API_KEY: getRequiredEnv("MISTRAL_API_KEY"),
 };

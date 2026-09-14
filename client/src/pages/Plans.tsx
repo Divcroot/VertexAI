@@ -21,9 +21,18 @@ interface Plan {
 
 interface PaymentOrderResponse {
   success?: boolean;
-  message?: string;
-  keyId?: string;
-  order?: { id?: string; amount?: number; currency?: string };
+  data: {
+    order: {
+      id: string;
+      amount: number;
+      currency: string;
+    };
+    plan: {
+      name: string;
+      credits: number;
+    };
+    keyId: string;
+  };
 }
 
 interface RazorpayResponse {
@@ -83,19 +92,19 @@ export default function Plans() {
 
     try {
       const data = (await createPaymentOrder(plan)) as PaymentOrderResponse;
-      if (!data.success || !data.order?.id || !data.keyId || data.order.amount === undefined) return;
+      if (!data.success || !data.data.order?.id || !data.data.keyId || data.data.order.amount === undefined) return;
       if (!window.Razorpay) {
         console.error("Razorpay SDK is not loaded.");
         return;
       }
 
       const razorpay = new window.Razorpay({
-        key: data.keyId,
-        amount: data.order.amount,
-        currency: data.order.currency || "INR",
+        key: data.data.keyId,
+        amount: data.data.order.amount,
+        currency: data.data.order.currency || "INR",
         name: "AI IDE",
         description: `${plan.name} Plan`,
-        order_id: data.order.id,
+        order_id: data.data.order.id,
         handler: async (response) => {
           try {
             await verifyPayment(response);

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
-import razorpay from "../config/razorpay.js";
 import { env } from "../config/env.js";
+import razorpay from "../config/razorpay.js";
 import { AppError } from "../error/AppError.js";
 import Payment from "../models/payment.model.js";
 import { addCreditsToUser } from "./updateCredits.js";
@@ -26,15 +26,29 @@ const PLANS: PlanCatalog = {
     },
 };
 
+const CURRENCY = "INR";
+
+const generateReceipt = (): string => {
+    return `receipt_${crypto.randomUUID()}`;
+};
+
 export const createOrder = async (
     userId: string,
     plan: Plan,
 ): Promise<CreateOrderResult> => {
     const selectedPlan = PLANS[plan];
+
+    if (!selectedPlan) {
+        throw new AppError(
+            "Invalid payment plan",
+            400,
+        );
+    }
+
     const order = await razorpay.orders.create({
         amount: selectedPlan.amount,
-        currency: "INR",
-        receipt: `receipt_${Date.now()}`,
+        currency: CURRENCY,
+        receipt: generateReceipt(),
         notes: {
             userId,
             plan,
@@ -46,7 +60,7 @@ export const createOrder = async (
         plan,
         amount: selectedPlan.amount,
         credits: selectedPlan.credits,
-        currency: "INR",
+        currency: CURRENCY,
         razorpayOrderId: order.id,
         status: "created",
     });
@@ -68,35 +82,47 @@ export const createOrder = async (
 export const verifyPayment = async (
     userId: string,
     paymentDetails: PaymentDetails,
-    cookieHeader?: string,
+    cookieHeader: string,
 ): Promise<VerifyPaymentResult> => {
     const {
         razorpay_order_id: orderId,
         razorpay_payment_id: paymentId,
         razorpay_signature: signature,
     } = paymentDetails;
+
     const payment = await Payment.findOne({
         razorpayOrderId: orderId,
         userId,
-    } as Record<string, string>);
+    });
 
     if (!payment) {
-        throw new AppError("Payment order not found", 404);
+        throw new AppError(
+            "Payment order not found",
+            404,
+        );
     }
 
+    // Idempotent verification
     if (payment.status === "paid") {
         return {
             message: "Payment already verified",
+            plan: payment.plan,
             credits: payment.credits,
         };
     }
 
+    // Verify Razorpay signature
     const generatedSignature = crypto
-        .createHmac("sha256", env.RAZORPAY_KEY_SECRET)
+        .createHmac(
+            "sha256",
+            env.RAZORPAY_KEY_SECRET,
+        )
         .update(`${orderId}|${paymentId}`)
         .digest("hex");
+
     const signaturesMatch =
-        generatedSignature.length === signature.length &&
+        generatedSignature.length ===
+        signature.length &&
         crypto.timingSafeEqual(
             Buffer.from(generatedSignature),
             Buffer.from(signature),
@@ -105,14 +131,32 @@ export const verifyPayment = async (
     if (!signaturesMatch) {
         payment.status = "failed";
         await payment.save();
-        throw new AppError("Invalid payment signature", 400);
+
+        throw new AppError(
+            "Invalid payment signature",
+            400,
+        );
+    }
+
+    // Store payment details before crediting user
+    payment.razorpayPaymentId = paymentId;
+
+    await payment.save();
+
+    try {
+        await addCreditsToUser(
+            userId,
+            payment.credits,
+            cookieHeader,
+            payment.plan,
+        );
+    } catch (error) {
+        throw error;
     }
 
     payment.status = "paid";
-    payment.razorpayPaymentId = paymentId;
-    await payment.save();
 
-    await addCreditsToUser(userId, payment.credits, cookieHeader);
+    await payment.save();
 
     return {
         message: "Payment verified successfully",

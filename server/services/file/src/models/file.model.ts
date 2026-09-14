@@ -19,6 +19,7 @@ const fileSchema = new Schema<IFile>(
             type: Schema.Types.ObjectId,
             ref: "User",
             required: true,
+            index: true,
         },
         parentId: {
             type: Schema.Types.ObjectId,
@@ -29,10 +30,13 @@ const fileSchema = new Schema<IFile>(
             type: Schema.Types.ObjectId,
             ref: "Project",
             required: true,
+            index: true,
         },
         name: {
             type: String,
             required: true,
+            trim: true,
+            maxlength: 255,
         },
         type: {
             type: String,
@@ -42,10 +46,12 @@ const fileSchema = new Schema<IFile>(
         extension: {
             type: String,
             default: "",
+            trim: true,
         },
         language: {
             type: String,
             default: "plaintext",
+            trim: true,
         },
         content: {
             type: String,
@@ -54,16 +60,32 @@ const fileSchema = new Schema<IFile>(
         size: {
             type: Number,
             default: 0,
+            min: 0,
         },
         isDeleted: {
             type: Boolean,
             default: false,
+            index: true,
         },
     },
     {
         timestamps: true,
     },
 );
+
+fileSchema.index({
+    owner: 1,
+    projectId: 1,
+    parentId: 1,
+    isDeleted: 1,
+});
+
+fileSchema.index({
+    owner: 1,
+    projectId: 1,
+    isDeleted: 1,
+    createdAt: 1,
+});
 
 const File = model<IFile>("File", fileSchema);
 

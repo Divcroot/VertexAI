@@ -7,7 +7,7 @@ import routes from "./routes/index.js";
 const createApp = (): Express => {
     const app = express();
 
-    //Request parsing
+    // Request parsing
     app.use(
         express.json({
             limit: "1mb",
@@ -21,10 +21,8 @@ const createApp = (): Express => {
         }),
     );
 
-    //API Routes
-    app.use("/", routes);
-
-    app.get("/", (_req, res) => {
+    // Service health check
+    app.get("/health", (_req, res) => {
         res.status(200).json({
             success: true,
             service: "payment",
@@ -33,7 +31,10 @@ const createApp = (): Express => {
         });
     });
 
-    //Error Handling
+    // API routes
+    app.use("/", routes);
+
+    // Error handling
     app.use(notFoundMiddleware);
     app.use(errorMiddleware);
 

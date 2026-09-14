@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { AppError } from "../error/AppError.js";
 import { env } from "../config/env.js";
+import { AppError } from "../error/AppError.js";
 import type {
     FileTreeNode,
     FileTreeResponse,
@@ -14,29 +14,35 @@ import {
 
 const FILE_SERVICE_URL = env.FILE_SERVICE_URL;
 
-// =================================================
-// GET PROJECT TREE
-// =================================================
-
+// Get project tree from File service
 export const getTree = async (
     projectId: string,
     userId: string,
 ): Promise<FileTreeNode[]> => {
-    if (!projectId) {
+    if (
+        typeof projectId !== "string" ||
+        !projectId.trim()
+    ) {
         throw new AppError(
             "Project ID is required",
             400,
         );
     }
 
-    if (!userId) {
+    if (
+        typeof userId !== "string" ||
+        !userId.trim()
+    ) {
         throw new AppError(
             "User ID is required",
             401,
         );
     }
 
-    const url = `${FILE_SERVICE_URL}/tree/${projectId}`;
+    const url =
+        `${FILE_SERVICE_URL}/tree/${encodeURIComponent(
+            projectId,
+        )}`;
 
     let response: Response;
 
@@ -46,7 +52,12 @@ export const getTree = async (
                 "x-user-id": userId,
             },
         });
-    } catch {
+    } catch (error: unknown) {
+        console.error(
+            "FILE SERVICE REQUEST ERROR:",
+            error,
+        );
+
         throw new AppError(
             "Unable to connect to file service",
             503,
@@ -59,7 +70,9 @@ export const getTree = async (
 
     try {
         data = text
-            ? (JSON.parse(text) as FileTreeResponse)
+            ? (JSON.parse(
+                text,
+            ) as FileTreeResponse)
             : {};
     } catch {
         data = {
@@ -85,10 +98,7 @@ export const getTree = async (
     return data.data;
 };
 
-// =================================================
-// WRITE NODES TO DISK
-// =================================================
-
+// Write file tree to workspace
 export const writeNodes = async (
     nodes: FileTreeNode[],
     directory: string,
@@ -105,10 +115,7 @@ export const writeNodes = async (
             name,
         );
 
-        // ---------------------------------------------
-        // FOLDER
-        // ---------------------------------------------
-
+        // Folder
         if (node.type === "folder") {
             await fs.mkdir(target, {
                 recursive: true,
@@ -122,10 +129,7 @@ export const writeNodes = async (
             continue;
         }
 
-        // ---------------------------------------------
-        // FILE
-        // ---------------------------------------------
-
+        // File
         if (node.type === "file") {
             await fs.mkdir(
                 path.dirname(target),
@@ -143,10 +147,7 @@ export const writeNodes = async (
     }
 };
 
-// =================================================
-// SYNC PROJECT
-// =================================================
-
+// Sync project to local workspace
 export const syncProject = async (
     projectId: string,
     userId: string,
@@ -167,10 +168,7 @@ export const syncProject = async (
         recursive: true,
     });
 
-    // -----------------------------------------------
     // Skip artificial Mongo root folder
-    // -----------------------------------------------
-
     if (
         tree.length === 1 &&
         tree[0]?.type === "folder"

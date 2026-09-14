@@ -1,5 +1,7 @@
-import File from "../models/file.model.js";
+import { Types } from "mongoose";
+
 import { AppError } from "../error/AppError.js";
+import File from "../models/file.model.js";
 import { buildTree } from "../utils/buildTree.js";
 
 interface CreateRootFolderInput {
@@ -34,92 +36,117 @@ interface UpdateItemInput {
     size?: number;
 }
 
-// Create a root folder inside a project
+const validateObjectId = (
+    value: string,
+    fieldName: string,
+): void => {
+    if (!Types.ObjectId.isValid(value)) {
+        throw new AppError(
+            `Invalid ${fieldName}`,
+            400,
+        );
+    }
+};
+
+const validateName = (
+    name: string,
+    type: "file" | "folder",
+): string => {
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+        throw new AppError(
+            `${type === "file" ? "File" : "Folder"} name is required`,
+            400,
+        );
+    }
+
+    if (trimmedName.length > 255) {
+        throw new AppError(
+            `${type === "file" ? "File" : "Folder"} name is too long`,
+            400,
+        );
+    }
+
+    return trimmedName;
+};
+
+// =====================================================
+// CREATE ROOT FOLDER
+// =====================================================
+
 export const createRootFolder = async ({
     owner,
     projectId,
     name,
 }: CreateRootFolderInput) => {
-    const existingFolder = await File.findOne({
-        owner,
+    validateObjectId(
         projectId,
-        parentId: null,
-        type: "folder",
+        "Project ID",
+    );
+
+    const folderName = validateName(
         name,
-        isDeleted: false,
-    });
+        "folder",
+    );
+
+    const existingFolder =
+        await File.findOne({
+            owner,
+            projectId,
+            parentId: null,
+            type: "folder",
+            name: folderName,
+            isDeleted: false,
+        });
 
     if (existingFolder) {
-        throw new AppError("Root folder already exists", 409);
+        throw new AppError(
+            "Root folder already exists",
+            409,
+        );
     }
 
-    const folder = await File.create({
+    return File.create({
         owner,
         projectId,
-        name,
+        name: folderName,
         type: "folder",
         parentId: null,
+        extension: "",
+        language: "plaintext",
+        content: "",
+        size: 0,
     });
-
-    return folder;
 };
 
-// Create a folder inside an existing folder
+// =====================================================
+// CREATE FOLDER
+// =====================================================
+
 export const createFolder = async ({
     owner,
     projectId,
     parentId,
     name,
 }: CreateFolderInput) => {
-    const parentFolder = await File.findOne({
-        _id: parentId,
-        owner,
+    validateObjectId(
         projectId,
-        type: "folder",
-        isDeleted: false,
-    });
+        "Project ID",
+    );
 
-    if (!parentFolder) {
-        throw new AppError("Parent folder not found", 404);
-    }
-
-    const existingFolder = await File.findOne({
-        owner,
-        projectId,
+    validateObjectId(
         parentId,
-        type: "folder",
+        "Parent folder ID",
+    );
+
+    const folderName = validateName(
         name,
-        isDeleted: false,
-    });
+        "folder",
+    );
 
-    if (existingFolder) {
-        throw new AppError("Folder already exists", 409);
-    }
-
-    const folder = await File.create({
-        owner,
-        projectId,
-        parentId,
-        name,
-        type: "folder",
-    });
-
-    return folder;
-};
-
-// Create a file inside a project
-export const createFile = async ({
-    owner,
-    projectId,
-    parentId = null,
-    name,
-    extension,
-    language,
-    content,
-    size,
-}: CreateFileInput) => {
-    if (parentId) {
-        const parentFolder = await File.findOne({
+    const parentFolder =
+        await File.findOne({
             _id: parentId,
             owner,
             projectId,
@@ -127,112 +154,327 @@ export const createFile = async ({
             isDeleted: false,
         });
 
+    if (!parentFolder) {
+        throw new AppError(
+            "Parent folder not found",
+            404,
+        );
+    }
+
+    const existingFolder =
+        await File.findOne({
+            owner,
+            projectId,
+            parentId,
+            type: "folder",
+            name: folderName,
+            isDeleted: false,
+        });
+
+    if (existingFolder) {
+        throw new AppError(
+            "Folder already exists",
+            409,
+        );
+    }
+
+    return File.create({
+        owner,
+        projectId,
+        parentId,
+        name: folderName,
+        type: "folder",
+        extension: "",
+        language: "plaintext",
+        content: "",
+        size: 0,
+    });
+};
+
+// =====================================================
+// CREATE FILE
+// =====================================================
+
+export const createFile = async ({
+    owner,
+    projectId,
+    parentId = null,
+    name,
+    extension = "",
+    language = "plaintext",
+    content = "",
+    size = 0,
+}: CreateFileInput) => {
+    validateObjectId(
+        projectId,
+        "Project ID",
+    );
+
+    const fileName = validateName(
+        name,
+        "file",
+    );
+
+    if (
+        parentId !== null &&
+        parentId !== undefined
+    ) {
+        validateObjectId(
+            parentId,
+            "Parent folder ID",
+        );
+
+        const parentFolder =
+            await File.findOne({
+                _id: parentId,
+                owner,
+                projectId,
+                type: "folder",
+                isDeleted: false,
+            });
+
         if (!parentFolder) {
-            throw new AppError("Parent folder not found", 404);
+            throw new AppError(
+                "Parent folder not found",
+                404,
+            );
         }
     }
 
-    const existingFile = await File.findOne({
-        owner,
-        projectId,
-        parentId,
-        type: "file",
-        name,
-        isDeleted: false,
-    });
-
-    if (existingFile) {
-        throw new AppError("File already exists", 409);
+    if (
+        !Number.isFinite(size) ||
+        size < 0
+    ) {
+        throw new AppError(
+            "Invalid file size",
+            400,
+        );
     }
 
-    const file = await File.create({
+    const existingFile =
+        await File.findOne({
+            owner,
+            projectId,
+            parentId,
+            type: "file",
+            name: fileName,
+            isDeleted: false,
+        });
+
+    if (existingFile) {
+        throw new AppError(
+            "File already exists",
+            409,
+        );
+    }
+
+    return File.create({
         owner,
         projectId,
         parentId,
-        name,
+        name: fileName,
         type: "file",
         extension,
         language,
         content,
         size,
     });
-
-    return file;
 };
 
-// Update an existing file or folder
+// =====================================================
+// UPDATE ITEM
+// =====================================================
+
 export const updateItem = async (
     itemId: string,
     owner: string,
     data: UpdateItemInput,
 ) => {
-    const item = await File.findOneAndUpdate(
+    validateObjectId(
+        itemId,
+        "Item ID",
+    );
+
+    const updateData: UpdateItemInput = {
+        ...data,
+    };
+
+    if (
+        typeof updateData.name === "string"
+    ) {
+        updateData.name = validateName(
+            updateData.name,
+            "file",
+        );
+    }
+
+    if (
+        updateData.size !== undefined &&
+        (
+            !Number.isFinite(updateData.size) ||
+            updateData.size < 0
+        )
+    ) {
+        throw new AppError(
+            "Invalid file size",
+            400,
+        );
+    }
+
+    return File.findOneAndUpdate(
         {
             _id: itemId,
             owner,
             isDeleted: false,
         },
-        data,
+        updateData,
         {
             new: true,
             runValidators: true,
         },
     );
-
-    return item;
 };
 
-// Soft delete an existing file or folder
+// =====================================================
+// DELETE ITEM
+// =====================================================
+
 export const deleteItem = async (
     itemId: string,
     owner: string,
 ) => {
-    const item = await File.findOneAndUpdate(
+    validateObjectId(
+        itemId,
+        "Item ID",
+    );
+
+    const item =
+        await File.findOne({
+            _id: itemId,
+            owner,
+            isDeleted: false,
+        });
+
+    if (!item) {
+        return null;
+    }
+
+    // Delete the selected item.
+    await File.updateOne(
         {
             _id: itemId,
             owner,
             isDeleted: false,
         },
         {
-            isDeleted: true,
-        },
-        {
-            new: true,
+            $set: {
+                isDeleted: true,
+            },
         },
     );
 
-    return item;
+    // Delete all descendants when deleting a folder.
+    if (item.type === "folder") {
+        const descendants =
+            await File.find({
+                owner,
+                projectId: item.projectId,
+                isDeleted: false,
+            })
+                .select("_id parentId")
+                .lean();
+
+        const deletedIds = new Set<string>(
+            [item._id.toString()],
+        );
+
+        let changed = true;
+
+        while (changed) {
+            changed = false;
+
+            for (const descendant of descendants) {
+                const parentId =
+                    descendant.parentId?.toString();
+
+                if (
+                    parentId &&
+                    deletedIds.has(parentId) &&
+                    !deletedIds.has(
+                        descendant._id.toString(),
+                    )
+                ) {
+                    deletedIds.add(
+                        descendant._id.toString(),
+                    );
+                    changed = true;
+                }
+            }
+        }
+
+        await File.updateMany(
+            {
+                _id: {
+                    $in: Array.from(
+                        deletedIds,
+                    ),
+                },
+                owner,
+            },
+            {
+                $set: {
+                    isDeleted: true,
+                },
+            },
+        );
+    }
+
+    return File.findById(itemId);
 };
 
-// Get a single file owned by the authenticated user
+// =====================================================
+// GET FILE
+// =====================================================
+
 export const getFile = async (
     fileId: string,
     owner: string,
 ) => {
-    const file = await File.findOne({
+    validateObjectId(
+        fileId,
+        "File ID",
+    );
+
+    return File.findOne({
         _id: fileId,
         owner,
         type: "file",
         isDeleted: false,
     });
-
-    return file;
 };
 
-// Get the file tree of a project
+// =====================================================
+// GET TREE
+// =====================================================
+
 export const getTree = async (
     projectId: string,
     owner: string,
 ) => {
+    validateObjectId(
+        projectId,
+        "Project ID",
+    );
+
     const files = await File.find({
         projectId,
         owner,
         isDeleted: false,
-    }).sort({
-        createdAt: 1,
-    });
+    })
+        .sort({
+            createdAt: 1,
+        })
+        .lean();
 
-    const tree = buildTree(files);
-
-    return tree;
+    return buildTree(files);
 };

@@ -12,7 +12,8 @@ export const safeName = (
   name: string,
 ): string => {
   if (
-    !name ||
+    typeof name !== "string" ||
+    !name.trim() ||
     name === "." ||
     name === ".." ||
     name.includes("/") ||
@@ -30,15 +31,30 @@ export const safeName = (
 export const getWorkspace = (
   projectId: string,
 ): string => {
-  if (!projectId) {
+  if (
+    typeof projectId !== "string" ||
+    !projectId.trim()
+  ) {
     throw new AppError(
       "Project ID is required",
       400,
     );
   }
 
+  if (
+    projectId === "." ||
+    projectId === ".." ||
+    projectId.includes("/") ||
+    projectId.includes("\\")
+  ) {
+    throw new AppError(
+      "Invalid project ID",
+      400,
+    );
+  }
+
   return path.join(
     WORKSPACE_ROOT,
-    String(projectId),
+    projectId,
   );
 };

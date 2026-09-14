@@ -1,10 +1,11 @@
-import dns from 'dns';
-dns.setServers(["8.8.8.8", "8.8.4.4"]);
+import dns from "node:dns";
 import http from "node:http";
 
 import app from "./app.js";
-import { env } from "./config/env.js";
 import { connectDB } from "./config/db.js";
+import { env } from "./config/env.js";
+
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 const server = http.createServer(app);
 
@@ -14,31 +15,54 @@ const startServer = async (): Promise<void> => {
 
     server.listen(env.PORT, env.HOST, () => {
       console.log(
-        `🚀 Payment running on http://${env.HOST}:${env.PORT}`,
+        `🚀 Payment service running on http://${env.HOST}:${env.PORT}`,
       );
     });
   } catch (error) {
-    console.error("❌ Failed to start payment service:", error);
+    console.error(
+      "❌ Failed to start payment service:",
+      error,
+    );
     process.exit(1);
   }
 };
 
+let isShuttingDown = false;
+
 const shutdown = (signal: string): void => {
-  console.log(`\n${signal} received. Shutting down gracefully...`);
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+
+  console.log(
+    `\n${signal} received. Shutting down gracefully...`,
+  );
 
   server.close((error) => {
     if (error) {
-      console.error("❌ Error while shutting down server:", error);
+      console.error(
+        "❌ Error while shutting down server:",
+        error,
+      );
       process.exit(1);
     }
 
-    console.log("✅ payment service shut down successfully.");
+    console.log(
+      "✅ Payment service shut down successfully.",
+    );
     process.exit(0);
   });
 };
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM");
+});
+
+process.on("SIGINT", () => {
+  shutdown("SIGINT");
+});
 
 process.on("uncaughtException", (error) => {
   console.error("❌ Uncaught exception:", error);
@@ -46,7 +70,10 @@ process.on("uncaughtException", (error) => {
 });
 
 process.on("unhandledRejection", (reason) => {
-  console.error("❌ Unhandled promise rejection:", reason);
+  console.error(
+    "❌ Unhandled promise rejection:",
+    reason,
+  );
   shutdown("unhandledRejection");
 });
 

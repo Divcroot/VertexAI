@@ -5,15 +5,22 @@ import {
     type Types,
 } from "mongoose";
 
+import type { Plan as PaymentPlan } from "../types/payment.types.js";
+
+export type PaymentStatus =
+    | "created"
+    | "paid"
+    | "failed";
+
 export interface IPayment extends Document {
     userId: Types.ObjectId;
-    plan: "pro" | "team";
+    plan: PaymentPlan;
     amount: number;
     credits: number;
-    currency: string;
+    currency: "INR";
     razorpayOrderId: string;
     razorpayPaymentId: string | null;
-    status: "created" | "paid" | "failed";
+    status: PaymentStatus;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -22,6 +29,7 @@ const paymentSchema = new Schema<IPayment>(
     {
         userId: {
             type: Schema.Types.ObjectId,
+            ref: "User",
             required: true,
             index: true,
         },
@@ -35,15 +43,18 @@ const paymentSchema = new Schema<IPayment>(
         amount: {
             type: Number,
             required: true,
+            min: 0,
         },
 
         credits: {
             type: Number,
             required: true,
+            min: 0,
         },
 
         currency: {
             type: String,
+            enum: ["INR"],
             default: "INR",
         },
 
@@ -51,17 +62,26 @@ const paymentSchema = new Schema<IPayment>(
             type: String,
             required: true,
             unique: true,
+            index: true,
+            trim: true,
         },
 
         razorpayPaymentId: {
             type: String,
             default: null,
+            index: true,
+            trim: true,
         },
 
         status: {
             type: String,
-            enum: ["created", "paid", "failed"],
+            enum: [
+                "created",
+                "paid",
+                "failed",
+            ],
             default: "created",
+            index: true,
         },
     },
     {
@@ -69,6 +89,14 @@ const paymentSchema = new Schema<IPayment>(
     },
 );
 
-const Payment = model<IPayment>("Payment", paymentSchema);
+paymentSchema.index({
+    userId: 1,
+    status: 1,
+});
+
+const Payment = model<IPayment>(
+    "Payment",
+    paymentSchema,
+);
 
 export default Payment;

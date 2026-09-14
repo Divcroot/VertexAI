@@ -1,7 +1,5 @@
 import express, {
     type Express,
-    type Request,
-    type Response,
 } from "express";
 
 import { errorMiddleware } from "./middlewares/error.middleware.js";
@@ -10,10 +8,7 @@ import { notFoundMiddleware } from "./middlewares/not-found.middleware.js";
 const createApp = (): Express => {
     const app = express();
 
-    // =================================================
-    // REQUEST PARSING
-    // =================================================
-
+    // Request parsing
     app.use(
         express.json({
             limit: "1mb",
@@ -27,29 +22,20 @@ const createApp = (): Express => {
         }),
     );
 
-    // =================================================
-    // HEALTH CHECK
-    // =================================================
+    // Health check
+    app.get("/health", (_req, res) => {
+        res.status(200).json({
+            success: true,
+            service: "terminal",
+            status: "healthy",
+            timestamp: new Date().toISOString(),
+        });
+    });
 
-    app.get(
-        "/health",
-        (
-            _req: Request,
-            res: Response,
-        ): void => {
-            res.status(200).json({
-                success: true,
-                service: "terminal",
-                status: "healthy",
-                timestamp: new Date().toISOString(),
-            });
-        },
-    );
+    // API routes
+    // app.use("/", routes);
 
-    // =================================================
-    // ERROR HANDLING
-    // =================================================
-
+    // Error handling
     app.use(notFoundMiddleware);
     app.use(errorMiddleware);
 

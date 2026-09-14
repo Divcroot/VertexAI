@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
+import { AppError } from "../error/AppError.js";
 import {
 	createOrder as createOrderService,
 	verifyPayment as verifyPaymentService,
@@ -10,14 +11,30 @@ import type {
 	Plan,
 	VerifyPaymentBody,
 } from "../types/payment.types.js";
-import { AppError } from "../error/AppError.js";
 
-const getUserId = (value: string | string[] | undefined): string | null => {
-	return typeof value === "string" && value.length > 0 ? value : null;
+const getUserId = (
+	value: string | string[] | undefined,
+): string => {
+	if (
+		typeof value !== "string" ||
+		!value.trim()
+	) {
+		throw new AppError(
+			"User ID is required",
+			401,
+		);
+	}
+
+	return value;
 };
 
-const isPlan = (value: unknown): value is Plan => {
-	return value === "pro" || value === "team";
+const isPlan = (
+	value: unknown,
+): value is Plan => {
+	return (
+		value === "pro" ||
+		value === "team"
+	);
 };
 
 const isPaymentDetails = (
@@ -25,11 +42,11 @@ const isPaymentDetails = (
 ): body is PaymentDetails => {
 	return (
 		typeof body.razorpay_order_id === "string" &&
+		body.razorpay_order_id.trim().length > 0 &&
 		typeof body.razorpay_payment_id === "string" &&
+		body.razorpay_payment_id.trim().length > 0 &&
 		typeof body.razorpay_signature === "string" &&
-		body.razorpay_order_id.length > 0 &&
-		body.razorpay_payment_id.length > 0 &&
-		body.razorpay_signature.length > 0
+		body.razorpay_signature.trim().length > 0
 	);
 };
 
@@ -39,25 +56,27 @@ export const createOrder = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
-		const userId = getUserId(req.headers["x-user-id"]);
+		const userId = getUserId(
+			req.headers["x-user-id"],
+		);
 
-		if (!userId) {
-			throw new AppError("User ID is required", 400);
-			return;
+		if (!isPlan(req.body?.plan)) {
+			throw new AppError(
+				"Invalid plan",
+				400,
+			);
 		}
 
-		if (!isPlan(req.body.plan)) {
-			throw new AppError("Invalid plan", 400);
-			return;
-		}
-
-		const result = await createOrderService(userId, req.body.plan);
+		const result = await createOrderService(
+			userId,
+			req.body.plan,
+		);
 
 		res.status(201).json({
 			success: true,
-			...result,
+			data: result,
 		});
-	} catch (error) {
+	} catch (error: unknown) {
 		next(error);
 	}
 };
@@ -68,31 +87,41 @@ export const verifyPayment = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
-		const userId = getUserId(req.headers["x-user-id"]);
-
-		if (!userId) {
-			throw new AppError("User ID is required", 400);
-			return;
-		}
-
-		if (!isPaymentDetails(req.body)) {
-			throw new AppError("Payment details are required", 400);
-			return;
-		}
-
-		const result = await verifyPaymentService(
-			userId,
-			req.body,
-			typeof req.headers.cookie === "string"
-				? req.headers.cookie
-				: undefined,
+		const userId = getUserId(
+			req.headers["x-user-id"],
 		);
 
-		res.json({
+		if (!isPaymentDetails(req.body)) {
+			throw new AppError(
+				"Payment details are required",
+				400,
+			);
+		}
+
+		const sessionCookie = req.headers.cookie;
+
+		if (
+			!sessionCookie ||
+			typeof sessionCookie !== "string"
+		) {
+			throw new AppError(
+				"Session is required",
+				401,
+			);
+		}
+
+		const result =
+			await verifyPaymentService(
+				userId,
+				req.body,
+				sessionCookie,
+			);
+
+		res.status(200).json({
 			success: true,
-			...result,
+			data: result,
 		});
-	} catch (error) {
+	} catch (error: unknown) {
 		next(error);
 	}
 };

@@ -6,7 +6,9 @@ declare global {
                 name: string;
                 email: string;
                 avatar: string;
-            }
+                credits: number;
+                plan: "free" | "pro" | "team";
+            };
         }
     }
 }

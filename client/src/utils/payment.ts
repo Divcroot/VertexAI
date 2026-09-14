@@ -14,8 +14,19 @@ export interface PaymentData {
 
 export interface PaymentResponse {
 	success: boolean;
-	message?: string;
-	[key: string]: unknown;
+	message: string;
+	data?: {
+		order: {
+			id: string;
+			amount: number;
+			currency: string;
+		};
+		plan: {
+			name: string;
+			credits: number;
+		};
+		keyId: string;
+	};
 }
 
 export const createPaymentOrder = async (
@@ -37,7 +48,7 @@ export const createPaymentOrder = async (
 			success: false,
 			message: axios.isAxiosError<{ message?: string }>(error)
 				? error.response?.data?.message ??
-					"Unable to create payment order"
+				"Unable to create payment order"
 				: "Unable to create payment order",
 		};
 	}
@@ -60,7 +71,7 @@ export const verifyPayment = async (
 			success: false,
 			message: axios.isAxiosError<{ message?: string }>(error)
 				? error.response?.data?.message ??
-					"Payment verification failed"
+				"Payment verification failed"
 				: "Payment verification failed",
 		};
 	}

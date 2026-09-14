@@ -1,4 +1,8 @@
-import type { NextFunction, Request, Response } from "express";
+import type {
+    NextFunction,
+    Request,
+    Response,
+} from "express";
 
 import {
     AIMessage,
@@ -11,15 +15,52 @@ import { createCodingGraph } from "../graph/graph.js";
 import { deductCredits } from "../utils/deductCredits.js";
 
 const MAX_HISTORY_MESSAGES = 6;
+const CHAT_CREDIT_COST = 10;
 
 // =====================================================
-// HISTORY
+// TYPES
 // =====================================================
 
 interface HistoryMessage {
     role: "user" | "assistant";
     content: string;
 }
+
+interface ChatRequestBody {
+    projectId?: unknown;
+    message?: unknown;
+    history?: unknown;
+}
+
+interface ToolResult {
+    success?: boolean;
+    operation?: string;
+    [key: string]: unknown;
+}
+
+// =====================================================
+// HISTORY
+// =====================================================
+
+const isHistoryMessage = (
+    value: unknown,
+): value is HistoryMessage => {
+    if (
+        typeof value !== "object" ||
+        value === null
+    ) {
+        return false;
+    }
+
+    const message = value as Record<string, unknown>;
+
+    return (
+        (message.role === "user" ||
+            message.role === "assistant") &&
+        typeof message.content === "string" &&
+        message.content.trim().length > 0
+    );
+};
 
 const buildHistory = (
     history: unknown,
@@ -28,37 +69,16 @@ const buildHistory = (
         return [];
     }
 
-    const recentHistory = history
-        .filter(
-            (item): item is HistoryMessage => {
-                if (
-                    typeof item !== "object" ||
-                    item === null
-                ) {
-                    return false;
-                }
+    return history
+        .filter(isHistoryMessage)
+        .slice(-MAX_HISTORY_MESSAGES)
+        .map((item) => {
+            if (item.role === "user") {
+                return new HumanMessage(item.content);
+            }
 
-                const message = item as Record<string, unknown>;
-
-                return (
-                    typeof message.content === "string" &&
-                    message.content.trim().length > 0 &&
-                    (
-                        message.role === "user" ||
-                        message.role === "assistant"
-                    )
-                );
-            },
-        )
-        .slice(-MAX_HISTORY_MESSAGES);
-
-    return recentHistory.map((item) => {
-        if (item.role === "user") {
-            return new HumanMessage(item.content);
-        }
-
-        return new AIMessage(item.content);
-    });
+            return new AIMessage(item.content);
+        });
 };
 
 // =====================================================
@@ -70,23 +90,21 @@ const sendEvent = (
     type: string,
     data: unknown,
 ): boolean => {
-    if (res.writableEnded || res.destroyed) {
+    if (
+        res.writableEnded ||
+        res.destroyed
+    ) {
         return false;
     }
 
     try {
-        const payload = JSON.stringify(data ?? {});
-
         res.write(`event: ${type}\n`);
-        res.write(`data: ${payload}\n\n`);
-
-        return true;
-    } catch (error: unknown) {
-        console.error(
-            "SSE SEND ERROR:",
-            error,
+        res.write(
+            `data: ${JSON.stringify(data ?? {})}\n\n`,
         );
 
+        return true;
+    } catch {
         return false;
     }
 };
@@ -98,17 +116,28 @@ const sendEvent = (
 const getMessageContent = (
     message: BaseMessage,
 ): string => {
-    if (typeof message.content === "string") {
+    if (
+        typeof message.content === "string"
+    ) {
         return message.content;
     }
 
-    if (Array.isArray(message.content)) {
+    if (
+        Array.isArray(message.content)
+    ) {
         return message.content
             .filter(
-                (item): item is { type: "text"; text: string } =>
+                (
+                    item,
+                ): item is {
+                    type: "text";
+                    text: string;
+                } =>
                     typeof item === "object" &&
                     item !== null &&
+                    "type" in item &&
                     item.type === "text" &&
+                    "text" in item &&
                     typeof item.text === "string",
             )
             .map((item) => item.text)
@@ -124,13 +153,25 @@ const getMessageContent = (
 
 const parseToolResult = (
     content: unknown,
-): unknown => {
-    if (typeof content !== "string") {
-        return content;
+): ToolResult | null => {
+    if (
+        typeof content !== "string"
+    ) {
+        return null;
     }
 
     try {
-        return JSON.parse(content);
+        const parsed: unknown =
+            JSON.parse(content);
+
+        if (
+            typeof parsed !== "object" ||
+            parsed === null
+        ) {
+            return null;
+        }
+
+        return parsed as ToolResult;
     } catch {
         return null;
     }
@@ -172,18 +213,14 @@ export const chat = async (
             projectId,
             message,
             history = [],
-        } = req.body as {
-            projectId?: unknown;
-            message?: unknown;
-            history?: unknown;
-        };
+        } = req.body as ChatRequestBody;
 
         if (
             typeof projectId !== "string" ||
             !projectId.trim()
         ) {
             throw new AppError(
-                "projectId is required",
+                "Project ID is required",
                 400,
             );
         }
@@ -193,10 +230,36 @@ export const chat = async (
             !message.trim()
         ) {
             throw new AppError(
-                "message is required",
+                "Message is required",
                 400,
             );
         }
+
+        // =================================================
+        // SESSION
+        // =================================================
+
+        const sessionCookie = req.headers.cookie;
+
+        if (
+            !sessionCookie ||
+            typeof sessionCookie !== "string"
+        ) {
+            throw new AppError(
+                "Session is required",
+                401,
+            );
+        }
+
+        // =================================================
+        // DEDUCT CHAT CREDITS
+        // =================================================
+
+        const creditResult = await deductCredits(
+            userId,
+            CHAT_CREDIT_COST,
+            sessionCookie,
+        );
 
         // =================================================
         // SSE HEADERS
@@ -230,19 +293,17 @@ export const chat = async (
 
         res.once("close", () => {
             disconnected = true;
-
-            console.log(
-                "AI CLIENT DISCONNECTED",
-            );
         });
 
         // =================================================
-        // START EVENT
+        // START
         // =================================================
 
         sendEvent(res, "start", {
             success: true,
             message: "AI started",
+            credits: creditResult.credits,
+            deducted: CHAT_CREDIT_COST,
         });
 
         // =================================================
@@ -250,20 +311,18 @@ export const chat = async (
         // =================================================
 
         const graph = createCodingGraph({
-            projectId,
+            projectId: projectId.trim(),
             userId,
         });
 
         // =================================================
-        // MESSAGE HISTORY
+        // MESSAGES
         // =================================================
 
         const messages = buildHistory(history);
 
         messages.push(
-            new HumanMessage(
-                message.trim(),
-            ),
+            new HumanMessage(message.trim()),
         );
 
         // =================================================
@@ -280,12 +339,11 @@ export const chat = async (
             },
         );
 
-        await deductCredits(userId, 10);
-
         let finalMessage = "";
+        let taskCompleted = false;
 
         // =================================================
-        // PROCESS GRAPH UPDATES
+        // PROCESS GRAPH
         // =================================================
 
         for await (const chunk of stream) {
@@ -293,16 +351,12 @@ export const chat = async (
                 disconnected ||
                 res.writableEnded
             ) {
-                console.log(
-                    "GRAPH STOPPED - CLIENT DISCONNECTED",
-                );
-
                 break;
             }
 
-            // =============================================
+            // ===============================================
             // AGENT UPDATE
-            // =============================================
+            // ===============================================
 
             if (chunk.agent) {
                 const agentMessages =
@@ -317,22 +371,24 @@ export const chat = async (
                     continue;
                 }
 
-                // -----------------------------------------
+                // ---------------------------------------------
                 // TOOL CALLS
-                // -----------------------------------------
+                // ---------------------------------------------
 
                 if (
                     lastMessage instanceof AIMessage &&
                     lastMessage.tool_calls?.length
                 ) {
                     for (
-                        const toolCall
-                        of lastMessage.tool_calls
+                        const toolCall of
+                        lastMessage.tool_calls
                     ) {
-                        console.log(
-                            "SSE -> tool_start:",
-                            toolCall.name,
-                        );
+                        if (
+                            toolCall.name ===
+                            "finish_task"
+                        ) {
+                            continue;
+                        }
 
                         sendEvent(
                             res,
@@ -348,9 +404,9 @@ export const chat = async (
                     continue;
                 }
 
-                // -----------------------------------------
-                // AI RESPONSE
-                // -----------------------------------------
+                // ---------------------------------------------
+                // AI MESSAGE
+                // ---------------------------------------------
 
                 const content =
                     getMessageContent(
@@ -370,72 +426,90 @@ export const chat = async (
                 }
             }
 
-            // =============================================
+            // ===============================================
             // TOOL UPDATE
-            // =============================================
+            // ===============================================
 
             if (chunk.tools) {
                 const toolMessages =
                     chunk.tools.messages ?? [];
 
                 for (
-                    const toolMessage
-                    of toolMessages
+                    const toolMessage of
+                    toolMessages
                 ) {
                     const result =
                         parseToolResult(
                             toolMessage.content,
                         );
 
-                    // -------------------------------------
-                    // FILE OPERATION
-                    // -------------------------------------
-
-                    if (
-                        typeof result === "object" &&
-                        result !== null &&
-                        "operation" in result
-                    ) {
-                        const operation =
-                            (
-                                result as {
-                                    operation: string;
-                                }
-                            ).operation;
-
-                        console.log(
-                            "SSE ->",
-                            operation,
-                        );
-
+                    if (!result) {
                         sendEvent(
                             res,
-                            operation,
+                            "tool_result",
+                            {
+                                content:
+                                    typeof toolMessage.content ===
+                                        "string"
+                                        ? toolMessage.content
+                                        : JSON.stringify(
+                                            toolMessage.content,
+                                        ),
+                            },
+                        );
+
+                        continue;
+                    }
+
+                    // -------------------------------------------
+                    // TASK COMPLETED
+                    // -------------------------------------------
+
+                    if (
+                        result.operation ===
+                        "task_completed"
+                    ) {
+                        taskCompleted = true;
+
+                        if (
+                            typeof result.summary ===
+                            "string"
+                        ) {
+                            finalMessage =
+                                result.summary;
+                        }
+
+                        continue;
+                    }
+
+                    // -------------------------------------------
+                    // FILE OPERATION
+                    // -------------------------------------------
+
+                    if (
+                        typeof result.operation ===
+                        "string"
+                    ) {
+                        sendEvent(
+                            res,
+                            result.operation,
                             result,
                         );
 
                         continue;
                     }
 
-                    // -------------------------------------
+                    // -------------------------------------------
                     // COMMAND RESULT
-                    // -------------------------------------
+                    // -------------------------------------------
 
                     if (
-                        typeof result === "object" &&
-                        result !== null &&
-                        (
-                            "command" in result ||
-                            "output" in result ||
-                            "stdout" in result ||
-                            "stderr" in result ||
-                            "exitCode" in result
-                        )
+                        "command" in result ||
+                        "output" in result ||
+                        "stdout" in result ||
+                        "stderr" in result ||
+                        "exitCode" in result
                     ) {
-                        console.log(
-                            "SSE -> command_result",
-                        );
-
                         sendEvent(
                             res,
                             "command_result",
@@ -445,9 +519,9 @@ export const chat = async (
                         continue;
                     }
 
-                    // -------------------------------------
+                    // -------------------------------------------
                     // GENERIC TOOL RESULT
-                    // -------------------------------------
+                    // -------------------------------------------
 
                     sendEvent(
                         res,
@@ -467,42 +541,41 @@ export const chat = async (
         }
 
         // =================================================
-        // DONE
+        // COMPLETION
         // =================================================
 
         if (
-            !disconnected &&
-            !res.writableEnded
+            disconnected ||
+            res.writableEnded
         ) {
-            console.log(
-                "SSE -> done",
-            );
-
-            sendEvent(
-                res,
-                "done",
-                {
-                    success: true,
-                    message:
-                        finalMessage || "Done.",
-                },
-            );
-
-            res.end();
-        }
-    } catch (error: unknown) {
-        console.error(
-            "AI STREAM ERROR:",
-            error,
-        );
-
-        if (disconnected) {
             return;
         }
 
-        // ================================================
-        // SSE ERROR
-        // ================================================
+        if (!taskCompleted) {
+            throw new AppError(
+                "AI agent stopped before completing the task",
+                500,
+            );
+        }
+
+        sendEvent(
+            res,
+            "done",
+            {
+                success: true,
+                message:
+                    finalMessage ||
+                    "Project completed.",
+                credits: creditResult.credits,
+                deducted: CHAT_CREDIT_COST,
+            },
+        );
+
+        res.end();
+    } catch (error: unknown) {
+        if (disconnected) {
+            return;
+        }
 
         if (res.headersSent) {
             const message =
@@ -525,10 +598,6 @@ export const chat = async (
 
             return;
         }
-
-        // ================================================
-        // NORMAL HTTP ERROR
-        // ================================================
 
         next(error);
     }

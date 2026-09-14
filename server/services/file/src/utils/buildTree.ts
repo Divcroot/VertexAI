@@ -16,10 +16,12 @@ export const buildTree = (files: IFile[]): FileTreeNode[] => {
     const nodeMap = new Map<string, FileTreeNode>();
     const tree: FileTreeNode[] = [];
 
-    // Create a tree node for every file and folder
+    // Create nodes
     for (const file of files) {
-        const node: FileTreeNode = {
-            id: file._id.toString(),
+        const id = file._id.toString();
+
+        nodeMap.set(id, {
+            id,
             name: file.name,
             type: file.type,
             extension: file.extension,
@@ -27,14 +29,13 @@ export const buildTree = (files: IFile[]): FileTreeNode[] => {
             content: file.content,
             size: file.size,
             children: [],
-        };
-
-        nodeMap.set(node.id, node);
+        });
     }
 
-    // Connect each node to its parent
+    // Build hierarchy
     for (const file of files) {
-        const node = nodeMap.get(file._id.toString());
+        const id = file._id.toString();
+        const node = nodeMap.get(id);
 
         if (!node) {
             continue;

@@ -1,10 +1,11 @@
-import dns from 'dns';
-dns.setServers(["8.8.8.8", "8.8.4.4"]);
+import dns from "node:dns";
 import http from "node:http";
 
 import app from "./app.js";
-import { env } from "./config/env.js";
 import { connectDB } from "./config/db.js";
+import { env } from "./config/env.js";
+
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 const server = http.createServer(app);
 
@@ -23,7 +24,15 @@ const startServer = async (): Promise<void> => {
   }
 };
 
+let isShuttingDown = false;
+
 const shutdown = (signal: string): void => {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+
   console.log(`\n${signal} received. Shutting down gracefully...`);
 
   server.close((error) => {
@@ -37,8 +46,13 @@ const shutdown = (signal: string): void => {
   });
 };
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM");
+});
+
+process.on("SIGINT", () => {
+  shutdown("SIGINT");
+});
 
 process.on("uncaughtException", (error) => {
   console.error("❌ Uncaught exception:", error);

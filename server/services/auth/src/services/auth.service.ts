@@ -1,64 +1,167 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 
 import { getAuth } from "firebase-admin/auth";
 
+import redis from "../../../../shared/redis/index.js";
 import firebaseApp from "../config/firebase.js";
 import { AppError } from "../error/AppError.js";
 import { User } from "../models/user.model.js";
-import redis from "../../../../shared/redis/index.js";
 
 const firebaseAuth = getAuth(firebaseApp);
 
+const SESSION_TTL = 7 * 24 * 60 * 60;
+
+type UserPlan = "free" | "pro" | "team";
+
+interface SessionData {
+  userId: string;
+  name: string;
+  email: string;
+  avatar: string;
+  credits: number;
+  plan: UserPlan;
+}
+
+interface LoginUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  credits: number;
+  plan: UserPlan;
+}
+
 interface LoginResult {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    avatar: string;
-    credits: number;
-  };
+  user: LoginUser;
   sessionId: string;
 }
 
-export const login = async (token: string): Promise<LoginResult> => {
+interface CreditResult {
+  credits: number;
+  plan: UserPlan;
+}
+
+// =====================================================
+// SESSION
+// =====================================================
+
+const getSession = async (
+  sessionId: string,
+): Promise<SessionData> => {
+  const sessionKey = `session:${sessionId}`;
+
+  const sessionData =
+    await redis.get(sessionKey);
+
+  if (!sessionData) {
+    throw new AppError(
+      "Session expired or invalid",
+      401,
+    );
+  }
+
+  try {
+    const session =
+      JSON.parse(sessionData) as SessionData;
+
+    if (
+      !session.userId ||
+      !session.name ||
+      !session.email
+    ) {
+      throw new AppError(
+        "Invalid session data",
+        500,
+      );
+    }
+
+    return session;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError(
+      "Invalid session data",
+      500,
+    );
+  }
+};
+
+const updateSession = async (
+  sessionId: string,
+  session: SessionData,
+): Promise<void> => {
+  await redis.set(
+    `session:${sessionId}`,
+    JSON.stringify(session),
+    "EX",
+    SESSION_TTL,
+  );
+};
+
+// =====================================================
+// LOGIN
+// =====================================================
+
+export const login = async (
+  token: string,
+): Promise<LoginResult> => {
   let decodedToken;
 
   try {
-    decodedToken = await firebaseAuth.verifyIdToken(token);
+    decodedToken =
+      await firebaseAuth.verifyIdToken(
+        token,
+      );
   } catch {
-    throw new AppError("Invalid or expired Firebase token", 401);
+    throw new AppError(
+      "Invalid or expired Firebase token",
+      401,
+    );
   }
 
-  const firebaseUid = decodedToken.uid;
+  const firebaseUid =
+    decodedToken.uid;
 
-  let user = await User.findOne({ firebaseUid });
+  let user =
+    await User.findOne({
+      firebaseUid,
+    });
 
   if (!user) {
     if (!decodedToken.email) {
-      throw new AppError("Firebase account does not have an email", 400);
+      throw new AppError(
+        "Firebase account does not have an email",
+        400,
+      );
     }
 
     user = await User.create({
       firebaseUid,
-      name: decodedToken.name ?? "User",
+      name:
+        decodedToken.name ?? "User",
       email: decodedToken.email,
-      avatar: decodedToken.picture ?? "",
+      avatar:
+        decodedToken.picture ?? "",
     });
   }
 
-  const sessionId = crypto.randomUUID();
+  const sessionId =
+    crypto.randomUUID();
 
-  await redis.set(
-    `session:${sessionId}`,
-    JSON.stringify({
-      name: user.name,
-      userId: user._id.toString(),
-      email: user.email,
-      avatar: user.avatar,
-      credits: user.credits,
-    }),
-    "EX",
-    7 * 24 * 60 * 60,
+  const session: SessionData = {
+    userId: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+    credits: user.credits,
+    plan: user.plan,
+  };
+
+  await updateSession(
+    sessionId,
+    session,
   );
 
   return {
@@ -68,126 +171,135 @@ export const login = async (token: string): Promise<LoginResult> => {
       email: user.email,
       avatar: user.avatar,
       credits: user.credits,
+      plan: user.plan,
     },
     sessionId,
   };
 };
 
-export const logout = async (sessionId: string): Promise<void> => {
-  await redis.del(`session:${sessionId}`);
+// =====================================================
+// LOGOUT
+// =====================================================
+
+export const logout = async (
+  sessionId: string,
+): Promise<void> => {
+  await redis.del(
+    `session:${sessionId}`,
+  );
 };
+
+// =====================================================
+// DEDUCT CREDITS
+// =====================================================
 
 export const deductCredits = async (
   userId: string,
   sessionId: string,
   amount: number,
-): Promise<{ credits: number }> => {
-  const user = await User.findOneAndUpdate(
-    {
-      _id: userId,
-      credits: {
-        $gte: amount,
+): Promise<CreditResult> => {
+  const session =
+    await getSession(sessionId);
+
+  if (
+    session.userId !== userId
+  ) {
+    throw new AppError(
+      "Invalid session",
+      401,
+    );
+  }
+
+  const user =
+    await User.findOneAndUpdate(
+      {
+        _id: userId,
+        credits: {
+          $gte: amount,
+        },
       },
-    },
-    {
-      $inc: {
-        credits: -amount,
+      {
+        $inc: {
+          credits: -amount,
+        },
       },
-    },
-    {
-      new: true,
-    },
-  ).select("credits");
+      {
+        new: true,
+      },
+    ).select("credits plan");
 
   if (!user) {
-    throw new AppError("Insufficient credits", 402);
+    throw new AppError(
+      "Insufficient credits",
+      402,
+    );
   }
 
-  const sessionKey = `session:${sessionId}`;
-
-  const sessionData = await redis.get(sessionKey);
-
-  if (!sessionData) {
-    throw new AppError("Session expired or invalid", 401);
-  }
-
-  let session: {
-    userId: string;
-    name: string;
-    email: string;
-    avatar: string;
-    credits?: number;
-  };
-
-  try {
-    session = JSON.parse(sessionData);
-  } catch {
-    throw new AppError("Invalid session data", 500);
-  }
-
-  await redis.set(
-    sessionKey,
-    JSON.stringify({
+  await updateSession(
+    sessionId,
+    {
       ...session,
       credits: user.credits,
-    }),
-    "EX",
-    7 * 24 * 60 * 60,
+      plan: user.plan,
+    },
   );
 
   return {
     credits: user.credits,
+    plan: user.plan,
   };
 };
+
+// =====================================================
+// ADD CREDITS
+// =====================================================
 
 export const addCredits = async (
   userId: string,
   sessionId: string,
+  plan: UserPlan,
   credits: number,
-): Promise<{ credits: number; }> => {
-  const user = await User.findById(userId);
+): Promise<CreditResult> => {
+  const session =
+    await getSession(sessionId);
 
-  if (!user) {
-    throw new AppError("User not found", 404);
+  if (
+    session.userId !== userId
+  ) {
+    throw new AppError(
+      "Invalid session",
+      401,
+    );
   }
 
-  user.credits = (user.credits || 0) + credits;
+  const user =
+    await User.findById(userId);
+
+  if (!user) {
+    throw new AppError(
+      "User not found",
+      404,
+    );
+  }
+
+  user.credits =
+    user.credits + credits;
+
+  user.plan = plan;
 
   await user.save();
 
-  const sessionKey = `session:${sessionId}`;
-
-  const sessionData = await redis.get(sessionKey);
-
-  if (!sessionData) {
-    throw new AppError("Session expired or invalid", 401);
-  }
-
-  let session: {
-    userId: string;
-    name: string;
-    email: string;
-    avatar: string;
-    credits?: number;
-  };
-
-  try {
-    session = JSON.parse(sessionData);
-  } catch {
-    throw new AppError("Invalid session data", 500);
-  }
-
-  await redis.set(
-    sessionKey,
-    JSON.stringify({
+  await updateSession(
+    sessionId,
+    {
       ...session,
       credits: user.credits,
-    }),
-    "EX",
-    7 * 24 * 60 * 60,
+      plan: user.plan,
+    },
   );
 
   return {
     credits: user.credits,
+    plan: user.plan,
   };
 };

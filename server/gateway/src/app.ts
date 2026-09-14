@@ -12,14 +12,20 @@ import routes from "./routes/index.js";
 const createApp = (): Express => {
     const app = express();
 
-    //Security
+    // Security
     app.disable("x-powered-by");
     app.use(helmet());
 
     // Request logging
-    app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
+    app.use(
+        morgan(
+            env.NODE_ENV === "production"
+                ? "combined"
+                : "dev",
+        ),
+    );
 
-    //CORS
+    // CORS
     app.use(
         cors({
             origin: env.CORS_ORIGIN,
@@ -27,7 +33,7 @@ const createApp = (): Express => {
         }),
     );
 
-    //Request parsing
+    // Request parsing
     app.use(
         express.json({
             limit: "1mb",
@@ -44,9 +50,7 @@ const createApp = (): Express => {
     // Cookie parsing
     app.use(cookieParser());
 
-    //API Routes
-    app.use("/api", routes);
-
+    // Health check
     app.get("/", (_req, res) => {
         res.status(200).json({
             success: true,
@@ -56,7 +60,10 @@ const createApp = (): Express => {
         });
     });
 
-    //Error Handling
+    // API routes
+    app.use("/api", routes);
+
+    // Error handling
     app.use(notFoundMiddleware);
     app.use(errorMiddleware);
 

@@ -6,7 +6,10 @@ export interface PlanDetails {
     credits: number;
 }
 
-export type PlanCatalog = Record<Plan, PlanDetails>;
+export type PlanCatalog = Record<
+    Plan,
+    PlanDetails
+>;
 
 export interface CreateOrderBody {
     plan?: unknown;
@@ -30,21 +33,26 @@ export interface CreateOrderResult {
         amount: number;
         currency: string;
     };
+
     plan: {
         name: string;
         credits: number;
     };
+
     keyId: string;
 }
 
 export interface VerifyPaymentResult {
     message: string;
-    plan?: Plan;
+    plan: Plan;
     credits: number;
 }
 
 export interface AuthCreditResponse {
-    success?: boolean;
-    credits?: number;
-    message?: string;
+    success: boolean;
+    message: string;
+    data: {
+        credits: number;
+        plan: "free" | "pro" | "team";
+    };
 }

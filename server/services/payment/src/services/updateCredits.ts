@@ -1,38 +1,81 @@
+import axios from "axios";
+
 import { env } from "../config/env.js";
-import type { AuthCreditResponse } from "../types/payment.types.js";
+import { AppError } from "../error/AppError.js";
+import type {
+    AuthCreditResponse,
+    Plan,
+} from "../types/payment.types.js";
 
 export const addCreditsToUser = async (
     userId: string,
     credits: number,
-    cookieHeader?: string,
+    cookieHeader: string,
+    plan: Plan,
 ): Promise<AuthCreditResponse> => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "x-user-id": userId,
-    };
-
-    if (cookieHeader) {
-        headers.cookie = cookieHeader;
+    if (!userId) {
+        throw new AppError(
+            "User ID is required",
+            401,
+        );
     }
 
-    const response = await fetch(`${env.AUTH_SERVICE_URL}/add-credits`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ credits }),
-    });
+    if (!credits || credits <= 0) {
+        throw new AppError(
+            "Credits must be greater than zero",
+            400,
+        );
+    }
 
-    const text = await response.text();
-    let data: AuthCreditResponse = {};
+    if (!cookieHeader) {
+        throw new AppError(
+            "Session is required",
+            401,
+        );
+    }
 
     try {
-        data = text ? (JSON.parse(text) as AuthCreditResponse) : {};
-    } catch {
-        data = { message: text };
-    }
+        const response =
+            await axios.post<AuthCreditResponse>(
+                `${env.AUTH_SERVICE_URL}/add-credits`,
+                {
+                    plan,
+                    credits,
+                },
+                {
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+                        "x-user-id": userId,
+                        Cookie: cookieHeader,
+                    },
+                    timeout: 10_000,
+                },
+            );
 
-    if (!response.ok) {
-        throw new Error(data.message ?? "Unable to add credits");
-    }
+        return response.data;
+    } catch (error: unknown) {
+        if (
+            axios.isAxiosError<AuthCreditResponse>(
+                error,
+            )
+        ) {
+            const message =
+                error.response?.data?.message ??
+                "Unable to add credits";
 
-    return data;
+            const statusCode =
+                error.response?.status ?? 500;
+
+            throw new AppError(
+                message,
+                statusCode,
+            );
+        }
+
+        throw new AppError(
+            "Unable to add credits",
+            500,
+        );
+    }
 };

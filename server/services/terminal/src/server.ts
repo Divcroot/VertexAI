@@ -1,10 +1,4 @@
 import dns from "node:dns";
-
-dns.setServers([
-  "8.8.8.8",
-  "8.8.4.4",
-]);
-
 import http from "node:http";
 
 import { Server } from "socket.io";
@@ -20,18 +14,16 @@ import {
   killAllSessions,
 } from "./terminal/session.js";
 
-// =================================================
-// HTTP SERVER
-// =================================================
+// DNS configuration
+dns.setServers([
+  "8.8.8.8",
+  "8.8.4.4",
+]);
 
-const server = http.createServer(
-  app,
-);
+// HTTP server
+const server = http.createServer(app);
 
-// =================================================
-// SOCKET.IO
-// =================================================
-
+// Socket.IO
 const io = new Server(server, {
   cors: {
     origin: true,
@@ -41,46 +33,56 @@ const io = new Server(server, {
 
 registerTerminalSocket(io);
 
-// =================================================
-// START SERVER
-// =================================================
+// Server state
+let isShuttingDown = false;
 
-const startServer =
-  async (): Promise<void> => {
-    try {
-      server.listen(
-        env.PORT,
-        env.HOST,
-        () => {
-          console.log(
-            `🚀 Terminal service running on http://${env.HOST}:${env.PORT}`,
-          );
-        },
+// Start server
+const startServer = (): void => {
+  server.listen(
+    env.PORT,
+    env.HOST,
+    () => {
+      console.log(
+        `🚀 Terminal service running on http://${env.HOST}:${env.PORT}`,
       );
-    } catch (error: unknown) {
-      console.error(
-        "❌ Failed to start terminal service:",
-        error,
-      );
+    },
+  );
+};
 
-      process.exit(1);
-    }
-  };
+// Server startup error
+server.on(
+  "error",
+  (error: Error) => {
+    console.error(
+      "❌ Terminal service failed:",
+      error,
+    );
 
-// =================================================
-// SHUTDOWN
-// =================================================
+    process.exit(1);
+  },
+);
 
+// Graceful shutdown
 const shutdown = (
   signal: string,
 ): void => {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+
   console.log(
     `\n${signal} received. Shutting down gracefully...`,
   );
 
-  // Kill all running shells.
+  // Stop accepting new Socket.IO connections.
+  io.close();
+
+  // Kill all running terminal sessions.
   killAllSessions();
 
+  // Close the HTTP server.
   server.close(
     (error?: Error) => {
       if (error) {
@@ -101,10 +103,7 @@ const shutdown = (
   );
 };
 
-// =================================================
-// PROCESS SIGNALS
-// =================================================
-
+// Process signals
 process.on(
   "SIGTERM",
   () => shutdown("SIGTERM"),
@@ -115,10 +114,7 @@ process.on(
   () => shutdown("SIGINT"),
 );
 
-// =================================================
-// PROCESS ERRORS
-// =================================================
-
+// Process errors
 process.on(
   "uncaughtException",
   (error: Error) => {
@@ -127,9 +123,7 @@ process.on(
       error,
     );
 
-    shutdown(
-      "uncaughtException",
-    );
+    shutdown("uncaughtException");
   },
 );
 
@@ -141,14 +135,9 @@ process.on(
       reason,
     );
 
-    shutdown(
-      "unhandledRejection",
-    );
+    shutdown("unhandledRejection");
   },
 );
 
-// =================================================
-// START
-// =================================================
-
-void startServer();
+// Start
+startServer();

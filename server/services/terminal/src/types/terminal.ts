@@ -24,7 +24,6 @@ export interface TerminalSession {
 
 export interface TerminalInitPayload {
     projectId: string;
-    userId: string;
     cols?: number;
     rows?: number;
 }

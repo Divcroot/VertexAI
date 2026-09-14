@@ -6,10 +6,7 @@ import type {
     TerminalInitPayload,
     TerminalResizePayload,
 } from "../types/terminal.js";
-
-import {
-    syncProject,
-} from "../workspace/sync.js";
+import { syncProject } from "../workspace/sync.js";
 
 import {
     getSession,
@@ -23,11 +20,17 @@ const SHELL =
         ? "powershell.exe"
         : "bash";
 
-// =================================================
-// SEND TERMINAL DATA
-// =================================================
+const DEFAULT_COLS = 80;
+const DEFAULT_ROWS = 30;
 
-const send = (
+const MIN_COLS = 20;
+const MAX_COLS = 500;
+
+const MIN_ROWS = 5;
+const MAX_ROWS = 200;
+
+// Send terminal data
+const sendTerminalData = (
     socket: Socket,
     data: unknown,
 ): void => {
@@ -41,50 +44,41 @@ const send = (
     );
 };
 
-// =================================================
-// NORMALIZE TERMINAL SIZE
-// =================================================
-
+// Normalize terminal columns
 const normalizeCols = (
     cols: number,
 ): number => {
-    const value = Number(cols);
-
-    if (!Number.isFinite(value)) {
-        return 80;
+    if (!Number.isFinite(cols)) {
+        return DEFAULT_COLS;
     }
 
     return Math.max(
-        20,
+        MIN_COLS,
         Math.min(
-            Math.floor(value),
-            500,
+            Math.floor(cols),
+            MAX_COLS,
         ),
     );
 };
 
+// Normalize terminal rows
 const normalizeRows = (
     rows: number,
 ): number => {
-    const value = Number(rows);
-
-    if (!Number.isFinite(value)) {
-        return 30;
+    if (!Number.isFinite(rows)) {
+        return DEFAULT_ROWS;
     }
 
     return Math.max(
-        5,
+        MIN_ROWS,
         Math.min(
-            Math.floor(value),
-            200,
+            Math.floor(rows),
+            MAX_ROWS,
         ),
     );
 };
 
-// =================================================
-// ERROR MESSAGE
-// =================================================
-
+// Get error message
 const getErrorMessage = (
     error: unknown,
 ): string => {
@@ -99,13 +93,26 @@ const getErrorMessage = (
     return "Terminal operation failed";
 };
 
-// =================================================
-// REGISTER SOCKET EVENTS
-// =================================================
-
+// Register terminal socket events
 export const registerTerminalSocket = (
     io: Server,
 ): void => {
+    io.use((socket, next) => {
+        const userId = socket.handshake.auth?.userId;
+
+        if (
+            typeof userId !== "string" ||
+            !userId.trim()
+        ) {
+            next(new Error("Unauthorized"));
+            return;
+        }
+
+        socket.data.userId = userId;
+
+        next();
+    });
+
     io.on(
         "connection",
         (socket: Socket) => {
@@ -114,10 +121,7 @@ export const registerTerminalSocket = (
                 socket.id,
             );
 
-            // ===========================================
-            // INIT
-            // ===========================================
-
+            // Initialize terminal
             socket.on(
                 "terminal:init",
                 async (
@@ -133,27 +137,34 @@ export const registerTerminalSocket = (
 
                         const {
                             projectId,
-                            userId,
                         } = payload;
 
-                        if (!projectId) {
+                        const userId =
+                            socket.data.userId;
+
+                        if (
+                            typeof projectId !==
+                            "string" ||
+                            !projectId.trim()
+                        ) {
                             throw new AppError(
                                 "Project ID is required",
                                 400,
                             );
                         }
 
-                        if (!userId) {
+                        if (
+                            typeof userId !==
+                            "string" ||
+                            !userId.trim()
+                        ) {
                             throw new AppError(
-                                "User ID is required",
+                                "Unauthorized",
                                 401,
                             );
                         }
 
-                        // ---------------------------------------
-                        // CLEAN EXISTING SESSION
-                        // ---------------------------------------
-
+                        // Clean existing session
                         const existingSession =
                             getSession(socket.id);
 
@@ -163,34 +174,33 @@ export const registerTerminalSocket = (
                             );
                         }
 
-                        // ---------------------------------------
-                        // TERMINAL SIZE
-                        // ---------------------------------------
-
+                        // Terminal size
                         const cols =
                             normalizeCols(
-                                payload.cols ?? 80,
+                                payload.cols ??
+                                DEFAULT_COLS,
                             );
 
                         const rows =
                             normalizeRows(
-                                payload.rows ?? 30,
+                                payload.rows ??
+                                DEFAULT_ROWS,
                             );
 
-                        // ---------------------------------------
-                        // SYNC PROJECT
-                        // ---------------------------------------
-
+                        // Sync project workspace
                         const { root } =
                             await syncProject(
                                 projectId,
                                 userId,
                             );
 
-                        // ---------------------------------------
-                        // SPAWN SHELL
-                        // ---------------------------------------
+                        // Socket may have disconnected
+                        // while the project was syncing.
+                        if (!socket.connected) {
+                            return;
+                        }
 
+                        // Spawn shell
                         const ptyProcess =
                             pty.spawn(
                                 SHELL,
@@ -207,28 +217,22 @@ export const registerTerminalSocket = (
                                 },
                             );
 
-                        // ---------------------------------------
-                        // PTY OUTPUT → SOCKET
-                        // ---------------------------------------
-
+                        // PTY output → Socket
                         ptyProcess.onData(
                             (data: string) => {
-                                send(
+                                sendTerminalData(
                                     socket,
                                     data,
                                 );
                             },
                         );
 
-                        // ---------------------------------------
-                        // PTY EXIT
-                        // ---------------------------------------
-
+                        // PTY exit
                         ptyProcess.onExit(
                             ({
                                 exitCode,
                             }): void => {
-                                send(
+                                sendTerminalData(
                                     socket,
                                     `\r\n\x1b[90m[shell exited: ${exitCode}]\x1b[0m\r\n`,
                                 );
@@ -249,10 +253,7 @@ export const registerTerminalSocket = (
                             },
                         );
 
-                        // ---------------------------------------
-                        // SAVE SESSION
-                        // ---------------------------------------
-
+                        // Store session
                         setSession(
                             socket.id,
                             {
@@ -266,7 +267,8 @@ export const registerTerminalSocket = (
                         console.log(
                             "TERMINAL INIT:",
                             {
-                                socketId: socket.id,
+                                socketId:
+                                    socket.id,
                                 projectId,
                                 userId,
                                 cwd: root,
@@ -275,10 +277,7 @@ export const registerTerminalSocket = (
                             },
                         );
 
-                        // ---------------------------------------
-                        // READY
-                        // ---------------------------------------
-
+                        // Terminal ready
                         socket.emit(
                             "terminal:ready",
                             {
@@ -292,7 +291,7 @@ export const registerTerminalSocket = (
                             error,
                         );
 
-                        send(
+                        sendTerminalData(
                             socket,
                             `\r\n\x1b[31m${getErrorMessage(
                                 error,
@@ -302,10 +301,7 @@ export const registerTerminalSocket = (
                 },
             );
 
-            // ===========================================
-            // USER INPUT
-            // ===========================================
-
+            // Terminal input
             socket.on(
                 "terminal:write",
                 (data: unknown): void => {
@@ -338,10 +334,7 @@ export const registerTerminalSocket = (
                 },
             );
 
-            // ===========================================
-            // RESIZE
-            // ===========================================
-
+            // Terminal resize
             socket.on(
                 "terminal:resize",
                 (
@@ -352,19 +345,17 @@ export const registerTerminalSocket = (
                             socket.id,
                         );
 
-                    if (!session) {
+                    if (!session || !payload) {
                         return;
                     }
 
-                    if (!payload) {
-                        return;
-                    }
+                    const cols = Number(
+                        payload.cols,
+                    );
 
-                    const cols =
-                        Number(payload.cols);
-
-                    const rows =
-                        Number(payload.rows);
+                    const rows = Number(
+                        payload.rows,
+                    );
 
                     if (
                         !Number.isFinite(cols) ||
@@ -373,16 +364,10 @@ export const registerTerminalSocket = (
                         return;
                     }
 
-                    const normalizedCols =
-                        normalizeCols(cols);
-
-                    const normalizedRows =
-                        normalizeRows(rows);
-
                     try {
                         session.ptyProcess.resize(
-                            normalizedCols,
-                            normalizedRows,
+                            normalizeCols(cols),
+                            normalizeRows(rows),
                         );
                     } catch (error: unknown) {
                         console.error(
@@ -393,10 +378,7 @@ export const registerTerminalSocket = (
                 },
             );
 
-            // ===========================================
-            // DISCONNECT
-            // ===========================================
-
+            // Disconnect
             socket.on(
                 "disconnect",
                 (): void => {

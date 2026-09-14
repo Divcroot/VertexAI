@@ -5,44 +5,29 @@ const sessions = new Map<
     TerminalSession
 >();
 
-// =================================================
-// GET SESSION
-// =================================================
-
+// Get session
 export const getSession = (
     socketId: string,
 ): TerminalSession | undefined => {
     return sessions.get(socketId);
 };
 
-// =================================================
-// SET SESSION
-// =================================================
-
+// Set session
 export const setSession = (
     socketId: string,
     session: TerminalSession,
 ): void => {
-    sessions.set(
-        socketId,
-        session,
-    );
+    sessions.set(socketId, session);
 };
 
-// =================================================
-// REMOVE SESSION
-// =================================================
-
+// Remove session
 export const removeSession = (
     socketId: string,
 ): void => {
     sessions.delete(socketId);
 };
 
-// =================================================
-// KILL SESSION
-// =================================================
-
+// Kill session
 export const killSession = (
     socketId: string,
 ): void => {
@@ -62,10 +47,7 @@ export const killSession = (
     sessions.delete(socketId);
 };
 
-// =================================================
-// KILL ALL SESSIONS
-// =================================================
-
+// Kill all sessions
 export const killAllSessions =
     (): void => {
         for (const session of sessions.values()) {

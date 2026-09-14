@@ -1,5 +1,5 @@
-import Project from "../models/project.model.js";
 import redis from "../../../../shared/redis/index.js";
+import Project from "../models/project.model.js";
 
 interface CreateProjectInput {
   owner: string;
@@ -7,7 +7,24 @@ interface CreateProjectInput {
   description?: string;
 }
 
-// Create a new project for the authenticated user
+const CACHE_TTL = 5 * 60;
+
+const getProjectsCacheKey = (
+  owner: string,
+): string => {
+  return `projects:${owner}`;
+};
+
+const getStarredProjectsCacheKey = (
+  owner: string,
+): string => {
+  return `projects:starred:${owner}`;
+};
+
+// =====================================================
+// CREATE PROJECT
+// =====================================================
+
 export const createProject = async ({
   owner,
   name,
@@ -19,44 +36,66 @@ export const createProject = async ({
     description,
   });
 
-  await redis.del(`projects:${owner}`);
+  await redis.del(
+    getProjectsCacheKey(owner),
+    getStarredProjectsCacheKey(owner),
+  );
 
   return project;
 };
 
-// Get all projects owned by the authenticated user
-export const getProjects = async (owner: string) => {
-  const cacheKey = `projects:${owner}`;
+// =====================================================
+// GET PROJECTS
+// =====================================================
 
-  const cachedProjects = await redis.get(cacheKey);
+export const getProjects = async (
+  owner: string,
+) => {
+  const cacheKey =
+    getProjectsCacheKey(owner);
+
+  const cachedProjects =
+    await redis.get(cacheKey);
 
   if (cachedProjects) {
-    return JSON.parse(cachedProjects);
+    try {
+      return JSON.parse(cachedProjects);
+    } catch {
+      await redis.del(cacheKey);
+    }
   }
 
-  const projects = await Project.find({ owner }).sort({
-    updatedAt: -1,
-  });
+  const projects = await Project.find({
+    owner,
+  })
+    .sort({
+      updatedAt: -1,
+    })
+    .lean();
 
   await redis.set(
     cacheKey,
     JSON.stringify(projects),
     "EX",
-    5 * 60,
+    CACHE_TTL,
   );
 
   return projects;
 };
 
-// Get a single project and update its last opened time
+// =====================================================
+// GET SINGLE PROJECT
+// =====================================================
+
 export const getSingleProject = async (
   projectId: string,
   owner: string,
 ) => {
-  const project = await Project.findOne({
-    _id: projectId,
-    owner,
-  });
+  const project =
+    await Project.findOne({
+      _id: projectId,
+      owner,
+    });
 
   if (!project) {
     return null;
@@ -66,45 +105,68 @@ export const getSingleProject = async (
 
   await project.save();
 
+  await redis.del(
+    getProjectsCacheKey(owner),
+    getStarredProjectsCacheKey(owner),
+  );
+
   return project;
 };
 
-// Get all starred projects owned by the authenticated user
-export const getStarredProjects = async (owner: string) => {
-  const cacheKey = `projects:starred:${owner}`;
+// =====================================================
+// GET STARRED PROJECTS
+// =====================================================
 
-  const cachedProjects = await redis.get(cacheKey);
+export const getStarredProjects = async (
+  owner: string,
+) => {
+  const cacheKey =
+    getStarredProjectsCacheKey(owner);
+
+  const cachedProjects =
+    await redis.get(cacheKey);
 
   if (cachedProjects) {
-    return JSON.parse(cachedProjects);
+    try {
+      return JSON.parse(cachedProjects);
+    } catch {
+      await redis.del(cacheKey);
+    }
   }
 
-  const projects = await Project.find({
-    owner,
-    starred: true,
-  }).sort({
-    createdAt: -1,
-  });
+  const projects =
+    await Project.find({
+      owner,
+      starred: true,
+    })
+      .sort({
+        createdAt: -1,
+      })
+      .lean();
 
   await redis.set(
     cacheKey,
     JSON.stringify(projects),
     "EX",
-    5 * 60,
+    CACHE_TTL,
   );
 
   return projects;
 };
 
-// Toggle the starred status of a project
+// =====================================================
+// TOGGLE STAR
+// =====================================================
+
 export const toggleStar = async (
   projectId: string,
   owner: string,
 ) => {
-  const project = await Project.findOne({
-    _id: projectId,
-    owner,
-  });
+  const project =
+    await Project.findOne({
+      _id: projectId,
+      owner,
+    });
 
   if (!project) {
     return null;
@@ -115,30 +177,34 @@ export const toggleStar = async (
   await project.save();
 
   await redis.del(
-    `projects:${owner}`,
-    `projects:starred:${owner}`,
+    getProjectsCacheKey(owner),
+    getStarredProjectsCacheKey(owner),
   );
 
   return project;
 };
 
-// Delete a project owned by the authenticated user
+// =====================================================
+// DELETE PROJECT
+// =====================================================
+
 export const deleteProject = async (
   projectId: string,
   owner: string,
 ) => {
-  const project = await Project.findOneAndDelete({
-    _id: projectId,
-    owner,
-  });
+  const project =
+    await Project.findOneAndDelete({
+      _id: projectId,
+      owner,
+    });
 
   if (!project) {
     return null;
   }
 
   await redis.del(
-    `projects:${owner}`,
-    `projects:starred:${owner}`,
+    getProjectsCacheKey(owner),
+    getStarredProjectsCacheKey(owner),
   );
 
   return project;

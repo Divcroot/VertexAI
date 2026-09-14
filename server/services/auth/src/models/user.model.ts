@@ -1,11 +1,14 @@
 import { Schema, model, type Document } from "mongoose";
 
+export type UserPlan = "free" | "pro" | "team";
+
 export interface IUser extends Document {
     firebaseUid: string;
     name: string;
     email: string;
     avatar: string;
     credits: number;
+    plan: UserPlan;
 }
 
 const userSchema = new Schema<IUser>(
@@ -45,6 +48,11 @@ const userSchema = new Schema<IUser>(
             min: 0,
         },
 
+        plan: {
+            type: String,
+            enum: ["free", "pro", "team"],
+            default: "free",
+        },
     },
     {
         timestamps: true,

@@ -184,14 +184,14 @@ const Explorer = ({ projectId, openFile }: ExplorerProps) => {
     return (
         <motion.div
             initial={{ opacity: 0, x: -16, width: 0 }}
-            animate={{ opacity: 1, x: 0, width: 288 }}
+            animate={{ opacity: 1, x: 0, width: 240 }}
             exit={{ opacity: 0, x: -16, width: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="flex h-full flex-col overflow-hidden border-r border-white/6 bg-[#111113]/90 backdrop-blur-xl"
         >
             {/* HEADER */}
 
-            <div className="flex h-10 w-72 shrink-0 items-center justify-between border-b border-white/6 px-3">
+            <div className="flex h-10 w-full shrink-0 items-center justify-between border-b border-white/6 px-3">
 
                 <span className="text-[11px] font-semibold tracking-wider text-zinc-500">
                     EXPLORER
@@ -252,7 +252,7 @@ const Explorer = ({ projectId, openFile }: ExplorerProps) => {
             {/* FILE TREE */}
 
             <div
-                className="w-72 flex-1 overflow-y-auto px-1 py-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/8 hover:[&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:transition-colors"
+                className="min-h-0 w-full flex-1 overflow-y-auto px-1 py-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/8 hover:[&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:transition-colors"
                 style={{
                     scrollbarWidth: "thin",
                     scrollbarColor: "rgba(255,255,255,0.1) transparent",

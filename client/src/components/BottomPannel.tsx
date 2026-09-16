@@ -2,8 +2,7 @@ import { AlertTriangle, FileOutput, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { VscTerminal } from "react-icons/vsc";
-import Terminal from "./Terminal";
-import { useProjects } from "../context/ProjectContext";
+import Terminal from "./terminal/Terminal";
 
 interface BottomPannelProps {
     projectId: string;
@@ -19,10 +18,6 @@ const TABS = [
 const BottomPannel = ({ projectId, onClose }: BottomPannelProps) => {
 
     const [activePanel, setActivePanel] = useState<string>("terminal");
-
-    const { currentProject } = useProjects();
-
-    const userId = currentProject?.owner;
 
     return (
         <motion.div
@@ -84,7 +79,6 @@ const BottomPannel = ({ projectId, onClose }: BottomPannelProps) => {
                 {activePanel === "terminal" && (
                     <Terminal 
                     projectId={projectId} 
-                    userId={userId} 
                     // onSocketReady={onTerminalSocket} 
                     />
                 )}

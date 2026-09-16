@@ -15,7 +15,7 @@ import Explorer from "../components/Explorer";
 import Preview from "../components/Preview";
 import Editor from "../components/Editor";
 import BottomPannel from "../components/BottomPannel";
-import AiChat from "../components/AiChat";
+import AiChat from "../components/ai/AiChat";
 import toast from "react-hot-toast";
 
 const ProjectPage = () => {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
 import api from "../utils/api";
 import { useProjects } from "./ProjectContext";
@@ -122,7 +122,7 @@ export const FileProvider = ({ children }: FileProviderProps) => {
     const [loading, setLoading] = useState<boolean>(true);
 
     // Fetch project file tree
-    const refreshTree = async (): Promise<void> => {
+    const refreshTree = useCallback(async (): Promise<void> => {
         if (!currentProject) {
             setTree([]);
             return;
@@ -142,7 +142,7 @@ export const FileProvider = ({ children }: FileProviderProps) => {
             console.log("File tree fetch error:", error);
             setTree([]);
         }
-    };
+    }, [currentProject?._id]);
 
     // Get a single file
     const getFile = async (

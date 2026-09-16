@@ -2,12 +2,15 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 import api from "../utils/api";
 
+export type UserPlan = "free" | "pro" | "team";
+
 export interface User {
     userId: string;
     name: string;
     email: string;
     avatar?: string;
     credits: number;
+    plan: UserPlan;
 }
 
 interface CurrentUserResponse {
@@ -26,6 +29,7 @@ interface AuthContextValue {
     user: User | null;
     loading: boolean;
     setUser: React.Dispatch<React.SetStateAction<User | null>>;
+    refreshUser: () => Promise<void>;
     login: (token: string) => Promise<LoginResponse | null>;
     logout: () => Promise<void>;
 }
@@ -41,6 +45,22 @@ export const AuthProvider = ({
 }: AuthProviderProps) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
+
+    const refreshUser = async (): Promise<void> => {
+        try {
+            const { data } = await api.get<CurrentUserResponse>(
+                "/api/user/me",
+            );
+
+            if (data.success && data.data) {
+                setUser(data.data);
+            } else {
+                setUser(null);
+            }
+        } catch (error: unknown) {
+            console.log("Refresh user error:", error);
+        }
+    };
 
     useEffect(() => {
         const restoreSession = async (): Promise<void> => {
@@ -96,6 +116,7 @@ export const AuthProvider = ({
                 user,
                 loading,
                 setUser,
+                refreshUser,
                 login,
                 logout,
             }}

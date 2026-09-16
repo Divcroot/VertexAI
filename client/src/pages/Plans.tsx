@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Check, Crown, Sparkles, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPaymentOrder, verifyPayment } from "../utils/payment";
+import { useAuth } from "../context/AuthContext";
 
 type PlanKey = "free" | "pro" | "team";
 
@@ -87,6 +88,8 @@ export default function Plans() {
 
   const navigate = useNavigate();
 
+  const { refreshUser } = useAuth();
+
   const handlePayment = async (plan: Plan): Promise<void> => {
     if (plan.current || plan.key === "free") return;
 
@@ -107,7 +110,11 @@ export default function Plans() {
         order_id: data.data.order.id,
         handler: async (response) => {
           try {
-            await verifyPayment(response);
+            const result = await verifyPayment(response);
+
+            if (result.success) {
+              await refreshUser();
+            }
           } catch (error) {
             console.error("PAYMENT VERIFICATION ERROR:", error);
           }

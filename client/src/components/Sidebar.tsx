@@ -12,13 +12,25 @@ interface SidebarProps {
     activeSection: Section;
     setActiveSection: React.Dispatch<React.SetStateAction<Section>>;
     credits: number;
+    plan: "free" | "pro" | "team";
 }
 
-const Sidebar = ({ activeSection, setActiveSection, credits = 100 }: SidebarProps) => {
+const CREDIT_LIMITS = {
+    free: 100,
+    pro: 500,
+    team: 2000,
+} as const;
+
+const Sidebar = ({ activeSection, setActiveSection, credits, plan }: SidebarProps) => {
 
     const navigate = useNavigate();
 
-    const creditPercentage = Math.min((credits / 100) * 100, 100);
+    const maxCredits = CREDIT_LIMITS[plan];
+
+    const creditPercentage = Math.min(
+        (credits / maxCredits) * 100,
+        100,
+    );
 
     return (
         <aside className="flex h-full w-64 shrink-0 flex-col border-r border-slate-200/70 bg-white/60 px-3 py-5 font-sans backdrop-blur-xl transition-colors duration-300 dark:border-white/6 dark:bg-white/2">

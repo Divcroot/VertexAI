@@ -139,11 +139,11 @@ export const ProjectProvider = ({
 
             setStarredProjects((currentProjects) => {
                 if (updatedProject.starred) {
-                    const alreadyExists = currentProjects.some(
+                    const existingProject = currentProjects.find(
                         (project) => project._id === projectId
                     );
 
-                    return alreadyExists
+                    return existingProject
                         ? currentProjects.map((project) =>
                             project._id === projectId ? updatedProject : project
                         )

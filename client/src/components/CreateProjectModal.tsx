@@ -47,7 +47,7 @@ const CreateProjectModal = ({ onClose }: CreateProjectModalProps) => {
                 onClick={onClose}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
                 className="fixed inset-0 bg-black/20 backdrop-blur-sm dark:bg-black/60"
             />
 

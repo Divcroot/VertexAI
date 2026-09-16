@@ -1,8 +1,8 @@
 import { Router } from "express";
 
 import {
-	createOrder,
-	verifyPayment,
+    createOrder,
+    verifyPayment,
 } from "../controllers/payment.controller.js";
 
 const router = Router();

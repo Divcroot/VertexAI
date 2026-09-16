@@ -82,7 +82,7 @@ const Preview = ({ tree, refreshKey }: PreviewProps) => {
     }
 
     if (js) {
-      const script = `<script>\n${js}\n<\/script>`;
+      const script = `<script>\n${js}\n</script>`;
 
       html = html.includes("</body>")
         ? html.replace(

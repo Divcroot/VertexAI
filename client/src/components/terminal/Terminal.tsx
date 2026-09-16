@@ -31,11 +31,6 @@ interface TerminalProps {
     ) => void;
 }
 
-interface TerminalReadyPayload {
-    cols: number;
-    rows: number;
-}
-
 interface TerminalResizePayload {
     cols: number;
     rows: number;
@@ -203,9 +198,7 @@ const Terminal = ({
 
         socket.on(
             "terminal:ready",
-            (
-                _data: TerminalReadyPayload,
-            ) => {
+            () => {
                 requestAnimationFrame(() => {
                     fitTerminal();
                     resizeTerminal();

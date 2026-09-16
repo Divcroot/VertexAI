@@ -12,25 +12,11 @@ interface SidebarProps {
     activeSection: Section;
     setActiveSection: React.Dispatch<React.SetStateAction<Section>>;
     credits: number;
-    plan: "free" | "pro" | "team";
 }
 
-const CREDIT_LIMITS = {
-    free: 100,
-    pro: 500,
-    team: 2000,
-} as const;
-
-const Sidebar = ({ activeSection, setActiveSection, credits, plan }: SidebarProps) => {
+const Sidebar = ({ activeSection, setActiveSection, credits }: SidebarProps) => {
 
     const navigate = useNavigate();
-
-    const maxCredits = CREDIT_LIMITS[plan];
-
-    const creditPercentage = Math.min(
-        (credits / maxCredits) * 100,
-        100,
-    );
 
     return (
         <aside className="flex h-full w-64 shrink-0 flex-col border-r border-slate-200/70 bg-white/60 px-3 py-5 font-sans backdrop-blur-xl transition-colors duration-300 dark:border-white/6 dark:bg-white/2">
@@ -69,16 +55,6 @@ const Sidebar = ({ activeSection, setActiveSection, credits, plan }: SidebarProp
                     <span className="text-[15px] font-bold text-slate-900 dark:text-white">
                         {credits}
                     </span>
-
-                </div>
-
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-
-                    <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${creditPercentage}%` }}
-                        transition={{ duration: 0.5 }}
-                        className="h-full rounded-full bg-slate-900 dark:bg-white" />
 
                 </div>
 

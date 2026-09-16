@@ -56,7 +56,6 @@ const Dashboard = () => {
                             activeSection={activeSection}
                             setActiveSection={setActiveSection}
                             credits={user.credits}
-                            plan={user.plan}
                         />
 
                     </div>

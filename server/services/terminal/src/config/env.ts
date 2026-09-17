@@ -17,6 +17,11 @@ const getRequiredEnv = (key: string): string => {
     return value;
 };
 
+const getServiceUrl = (key: string): string => {
+    const value = getRequiredEnv(key);
+    return value.includes("://") ? value : `http://${value}`;
+};
+
 const getPort = (): number => {
     const value = process.env.PORT ?? "8005";
     const port = Number(value);
@@ -40,7 +45,7 @@ const getNodeEnvironment = (): Environment["NODE_ENV"] => {
 
 export const env: Environment = {
     NODE_ENV: getNodeEnvironment(),
-    HOST: process.env.HOST ?? "localhost",
+    HOST: process.env.HOST ?? "0.0.0.0",
     PORT: getPort(),
-    FILE_SERVICE_URL: getRequiredEnv("FILE_SERVICE_URL"),
+    FILE_SERVICE_URL: getServiceUrl("FILE_SERVICE_URL"),
 };

@@ -43,7 +43,7 @@ const getNodeEnvironment = (): Environment["NODE_ENV"] => {
 
 export const env: Environment = {
     NODE_ENV: getNodeEnvironment(),
-    HOST: process.env.HOST ?? "localhost",
+    HOST: process.env.HOST ?? "0.0.0.0",
     PORT: getPort(),
     MONGODB_URL: getRequiredEnv("MONGODB_URL"),
     FIREBASE_PROJECT_ID: getRequiredEnv("FIREBASE_PROJECT_ID"),

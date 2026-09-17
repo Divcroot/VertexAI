@@ -1,0 +1,208 @@
+services:
+  - type: web
+    name: vertex-client
+    runtime: static
+    rootDir: client
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./client/dist
+    envVars:
+      - key: VITE_SERVER_URL
+        sync: false
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+
+  - type: web
+    runtime: docker
+    name: vertex-gateway
+    dockerfilePath: ./server/gateway/Dockerfile
+    dockerContext: ./server
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: CORS_ORIGIN
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: vertex-redis
+          property: connectionString
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-auth
+          property: hostport
+      - key: PROJECT_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-project
+          property: hostport
+      - key: FILE_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-file
+          property: hostport
+      - key: AI_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-ai
+          property: hostport
+      - key: TERMINAL_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-terminal
+          property: hostport
+      - key: PAYMENT_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-payment
+          property: hostport
+
+  - type: pserv
+    runtime: docker
+    name: vertex-auth
+    dockerfilePath: ./server/services/auth/Dockerfile
+    dockerContext: ./server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "8001"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: vertex-redis
+          property: connectionString
+      - key: MONGODB_URL
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+
+  - type: pserv
+    runtime: docker
+    name: vertex-project
+    dockerfilePath: ./server/services/project/Dockerfile
+    dockerContext: ./server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "8002"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: vertex-redis
+          property: connectionString
+      - key: MONGODB_URL
+        sync: false
+
+  - type: pserv
+    runtime: docker
+    name: vertex-file
+    dockerfilePath: ./server/services/file/Dockerfile
+    dockerContext: ./server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "8003"
+      - key: MONGODB_URL
+        sync: false
+
+  - type: pserv
+    runtime: docker
+    name: vertex-ai
+    dockerfilePath: ./server/services/ai/Dockerfile
+    dockerContext: ./server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "8004"
+      - key: MONGODB_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-auth
+          property: hostport
+      - key: FILE_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-file
+          property: hostport
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+  - type: pserv
+    runtime: docker
+    name: vertex-terminal
+    dockerfilePath: ./server/services/terminal/Dockerfile
+    dockerContext: ./server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "8005"
+      - key: FILE_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-file
+          property: hostport
+
+  - type: pserv
+    runtime: docker
+    name: vertex-payment
+    dockerfilePath: ./server/services/payment/Dockerfile
+    dockerContext: ./server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "8006"
+      - key: MONGODB_URL
+        sync: false
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: pserv
+          name: vertex-auth
+          property: hostport
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+
+  - type: keyvalue
+    name: vertex-redis
+    plan: free
+    ipAllowList: []

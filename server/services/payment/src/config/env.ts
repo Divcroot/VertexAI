@@ -20,6 +20,11 @@ const getRequiredEnv = (key: string): string => {
     return value;
 };
 
+const getServiceUrl = (key: string): string => {
+    const value = getRequiredEnv(key);
+    return value.includes("://") ? value : `http://${value}`;
+};
+
 const getPort = (): number => {
     const value = process.env.PORT ?? "8006";
     const port = Number(value);
@@ -43,10 +48,10 @@ const getNodeEnvironment = (): Environment["NODE_ENV"] => {
 
 export const env: Environment = {
     NODE_ENV: getNodeEnvironment(),
-    HOST: process.env.HOST ?? "localhost",
+    HOST: process.env.HOST ?? "0.0.0.0",
     PORT: getPort(),
     MONGODB_URL: getRequiredEnv("MONGODB_URL"),
-    AUTH_SERVICE_URL: getRequiredEnv("AUTH_SERVICE_URL"),
+    AUTH_SERVICE_URL: getServiceUrl("AUTH_SERVICE_URL"),
     RAZORPAY_KEY_ID: getRequiredEnv("RAZORPAY_KEY_ID"),
     RAZORPAY_KEY_SECRET: getRequiredEnv("RAZORPAY_KEY_SECRET"),
 };

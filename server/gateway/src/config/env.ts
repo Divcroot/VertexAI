@@ -24,6 +24,11 @@ const getRequiredEnv = (key: string): string => {
     return value;
 };
 
+const getServiceUrl = (key: string): string => {
+    const value = getRequiredEnv(key);
+    return value.includes("://") ? value : `http://${value}`;
+};
+
 const getPort = (): number => {
     const value = process.env.PORT ?? "8000";
     const port = Number(value);
@@ -51,10 +56,10 @@ export const env: Environment = {
     PORT: getPort(),
     CORS_ORIGIN: getRequiredEnv("CORS_ORIGIN"),
 
-    AUTH_SERVICE_URL: getRequiredEnv("AUTH_SERVICE_URL"),
-    PROJECT_SERVICE_URL: getRequiredEnv("PROJECT_SERVICE_URL"),
-    FILE_SERVICE_URL: getRequiredEnv("FILE_SERVICE_URL"),
-    AI_SERVICE_URL: getRequiredEnv("AI_SERVICE_URL"),
-    TERMINAL_SERVICE_URL: getRequiredEnv("TERMINAL_SERVICE_URL"),
-    PAYMENT_SERVICE_URL: getRequiredEnv("PAYMENT_SERVICE_URL"),
+    AUTH_SERVICE_URL: getServiceUrl("AUTH_SERVICE_URL"),
+    PROJECT_SERVICE_URL: getServiceUrl("PROJECT_SERVICE_URL"),
+    FILE_SERVICE_URL: getServiceUrl("FILE_SERVICE_URL"),
+    AI_SERVICE_URL: getServiceUrl("AI_SERVICE_URL"),
+    TERMINAL_SERVICE_URL: getServiceUrl("TERMINAL_SERVICE_URL"),
+    PAYMENT_SERVICE_URL: getServiceUrl("PAYMENT_SERVICE_URL"),
 };

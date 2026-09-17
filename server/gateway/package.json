@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "nodemon --exec tsx src/server.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/server/gateway/src/server.js"
   },
   "keywords": [],
   "author": "",

@@ -21,6 +21,11 @@ const getRequiredEnv = (key: string): string => {
     return value;
 };
 
+const getServiceUrl = (key: string): string => {
+    const value = getRequiredEnv(key);
+    return value.includes("://") ? value : `http://${value}`;
+};
+
 const getPort = (): number => {
     const value = process.env.PORT ?? "8004";
     const port = Number(value);
@@ -44,11 +49,11 @@ const getNodeEnvironment = (): Environment["NODE_ENV"] => {
 
 export const env: Environment = {
     NODE_ENV: getNodeEnvironment(),
-    HOST: process.env.HOST ?? "localhost",
+    HOST: process.env.HOST ?? "0.0.0.0",
     PORT: getPort(),
     MONGODB_URL: getRequiredEnv("MONGODB_URL"),
     FRONTEND_URL: getRequiredEnv("FRONTEND_URL"),
-    AUTH_SERVICE_URL: getRequiredEnv("AUTH_SERVICE_URL"),
-    FILE_SERVICE_URL: getRequiredEnv("FILE_SERVICE_URL"),
+    AUTH_SERVICE_URL: getServiceUrl("AUTH_SERVICE_URL"),
+    FILE_SERVICE_URL: getServiceUrl("FILE_SERVICE_URL"),
     OPENROUTER_API_KEY: getRequiredEnv("OPENROUTER_API_KEY"),
 };

@@ -15,6 +15,7 @@ import {
 
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const isProduction = env.NODE_ENV === "production";
 
 const getUserId = (req: Request): string => {
     const userId = req.headers["x-user-id"];
@@ -55,9 +56,10 @@ const clearSessionCookie = (
         SESSION_COOKIE,
         {
             path: "/",
-            secure:
-                env.NODE_ENV === "production",
-            sameSite: "lax",
+            secure: isProduction,
+            sameSite: isProduction
+                ? "none"
+                : "lax",
         },
     );
 };
@@ -96,9 +98,10 @@ export const login = async (
             sessionId,
             {
                 httpOnly: true,
-                secure:
-                    env.NODE_ENV === "production",
-                sameSite: "lax",
+                secure: isProduction,
+                sameSite: isProduction
+                    ? "none"
+                    : "lax",
                 path: "/",
                 maxAge: SESSION_MAX_AGE,
             },

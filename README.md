@@ -1,5 +1,7 @@
 # Vertex AI
 
+Live demo: https://vertexai-judv.onrender.com
+
 Vertex AI is a browser-based AI development environment for creating projects, editing files, previewing applications, and working with an AI coding assistant from one workspace.
 
 The application is organized as a TypeScript monorepo with a React/Vite client, an Express gateway, and focused backend services for authentication, projects, files, AI, terminal sessions, and payments.
